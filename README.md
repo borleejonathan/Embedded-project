@@ -1,0 +1,2 @@
+# Embedded-project
+Team Freddy 
