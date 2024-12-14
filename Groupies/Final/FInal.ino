@@ -21,7 +21,7 @@ NewPing DistanceSensor(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE);
 // Servo
 Servo servo;
 #define SERVO_PIN 3
-int spoint = 90; // Pos du servo
+int spoint = 90; // Position du servo
 
 // PID
 float kp = 1.5, ki = 0.0, kd = 0.5;
@@ -32,16 +32,12 @@ int baseSpeed = 50;
 volatile int ticksGauche = 0; // Ticks pour le moteur gauche
 volatile int ticksDroite = 0; // Ticks pour le moteur droit
 float distanceParcourue = 0;
-float distanceTotaleAvantVirage = 1100;
-float distanceApresVirage = 200;
-float circonferenceRoue = 70 * PI; //roue de 70 mm de diamètre (à ajuster)
-int ticksParRotation = 20; //Ticks par rotation de l'encodeur (à ajuster)
+float distanceTotale = 1300; // Distance totale avant arrêt (en mm) (à ajuster)
+float circonferenceRoue = 70 * PI; // Circonférence de la roue (à ajuster)
+int ticksParRotation = 20; // Ticks par rotation (à ajuster)
 
-// detect d'obstacles
+// Détection d'obstacles
 const int obstacleThreshold = 15;
-
-// Variables globales
-int L = 0, R = 0, distance = 0;
 
 // Encodeurs
 #define ENCODER_LEFT_A 2
@@ -57,33 +53,16 @@ void setup() {
     pinMode(ENCODER_LEFT_A, INPUT_PULLUP);
     pinMode(ENCODER_RIGHT_A, INPUT_PULLUP);
 
-    // Attach interruptions pour compter les ticks
+    // Attach interruptions pour compter les ticks des encodeurs
     attachInterrupt(digitalPinToInterrupt(ENCODER_LEFT_A), countTicksGauche, RISING);
     attachInterrupt(digitalPinToInterrupt(ENCODER_RIGHT_A), countTicksDroite, RISING);
 
     servo.attach(SERVO_PIN);
-    servo.write(spoint); // Position initiale (centrale)
+    servo.write(spoint); // Position initiale du servo
     delay(500);
 }
 
 void loop() {
-    // Calcul de la distance parcourue
-    updateDistance();
-
-    // Gestion des étapes
-    if (distanceParcourue < distanceTotaleAvantVirage) {
-        avancer();
-    } else if (distanceParcourue < distanceTotaleAvantVirage + distanceApresVirage) {
-        if (distanceParcourue == distanceTotaleAvantVirage) {
-            //virage de 45°
-            virage(45);
-        }
-        avancer();
-    } else {
-        Stop();
-        return;
-    }
-
     // Vérification des obstacles
     distance = DistanceSensor.ping_cm();
     if (distance > 0 && distance <= obstacleThreshold) {
@@ -91,12 +70,41 @@ void loop() {
         return;
     }
 
-    Serial.print("Ticks gauche : ");
-    Serial.println(ticksGauche);
-    Serial.print("Ticks droite : ");
-    Serial.println(ticksDroite);
-    delay(100); // Pause pour la lisibilité
+    // Mise à jour de la distance parcourue
+    updateDistance();
 
+    // Si la distance totale est atteinte, arrêter le robot
+    if (distanceParcourue >= distanceTotale) {
+        Stop();
+        Serial.println("Arrêt final atteint : distance parcourue dépassée.");
+        while (1); // Arrêt complet du programme
+    }
+
+    // Lecture des capteurs IR
+    int valueLeft = analogRead(IR_LEFT);
+    int valueRight = analogRead(IR_RIGHT);
+
+    // Calcul de l'erreur pour le PID
+    int error = valueRight - valueLeft;
+    float correction = computePID(error);
+
+    // Calcul des vitesses des moteurs en fonction de la correction PID
+    int speedMotorLEFT = constrain(baseSpeed - correction, 0, 50);
+    int speedMotorRIGHT = constrain(baseSpeed + correction, 0, 50);
+
+    // Appliquer les vitesses calculées
+    myMotorLEFT->setSpeed(speedMotorLEFT);
+    myMotorLEFT->run(FORWARD);
+
+    myMotorRIGHT->setSpeed(speedMotorRIGHT);
+    myMotorRIGHT->run(FORWARD);
+
+    // Debugging : afficher les données importantes
+    Serial.print("Distance parcourue : ");
+    Serial.println(distanceParcourue);
+    Serial.print("Correction PID : ");
+    Serial.println(correction);
+    delay(10); // Pause pour lisibilité
 }
 
 float computePID(float error) {
@@ -112,11 +120,11 @@ void Obstacle() {
     delay(500);
     Stop();
 
-    servo.write(45); // Vers la gauche
+    servo.write(45); // Scanner vers la gauche
     delay(800);
     L = DistanceSensor.ping_cm();
 
-    servo.write(135); // Vers la droite
+    servo.write(135); // Scanner vers la droite
     delay(800);
     R = DistanceSensor.ping_cm();
 
@@ -138,7 +146,7 @@ void Obstacle() {
     }
 }
 
-void avancer() {
+void forward() {
     myMotorLEFT->setSpeed(baseSpeed);
     myMotorRIGHT->setSpeed(baseSpeed);
     myMotorLEFT->run(FORWARD);
@@ -173,26 +181,17 @@ void Stop() {
     myMotorRIGHT->run(RELEASE);
 }
 
-void virage(int angle) {
-    // Effectuer un virage en fonction de l'angle
-    myMotorLEFT->setSpeed(baseSpeed);
-    myMotorRIGHT->setSpeed(baseSpeed);
-    myMotorLEFT->run(FORWARD);
-    myMotorRIGHT->run(BACKWARD);
-    delay(angle * 10); //durée pour virage (à ajuster)
-    Stop();
-}
-
 void updateDistance() {
-    noInterrupts(); // Empêche les interruptions pendant la lecture
+    noInterrupts(); // Empêche les interruptions durant la lecture
     int ticksGaucheCopy = ticksGauche;
     int ticksDroiteCopy = ticksDroite;
     interrupts(); // Réactive les interruptions
 
+    // Moyenne des ticks pour estimer la distance parcourue
     float moyenneTicks = (ticksGaucheCopy + ticksDroiteCopy) / 2.0;
     distanceParcourue += moyenneTicks * (circonferenceRoue / ticksParRotation);
 
-    // Réinitialiser les ticks pour la prochaine itération
+    // Réinitialiser les ticks pour la prochaine boucle
     ticksGauche = 0;
     ticksDroite = 0;
 }
