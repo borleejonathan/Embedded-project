@@ -28,10 +28,24 @@ float kp = 1.5, ki = 0.0, kd = 0.5;
 float previousError = 0, integral = 0;
 int baseSpeed = 50;
 
+// Suivi de distance
+volatile int ticksGauche = 0; // Ticks pour le moteur gauche
+volatile int ticksDroite = 0; // Ticks pour le moteur droit
+float distanceParcourue = 0;
+float distanceTotaleAvantVirage = 1100;
+float distanceApresVirage = 200;
+float circonferenceRoue = 70 * PI; //roue de 70 mm de diamètre (à ajuster)
+int ticksParRotation = 20; //Ticks par rotation de l'encodeur (à ajuster)
+
 // detect d'obstacles
 const int obstacleThreshold = 15;
 
+// Variables globales
 int L = 0, R = 0, distance = 0;
+
+// Encodeurs
+#define ENCODER_LEFT_A 2
+#define ENCODER_RIGHT_A 3
 
 void setup() {
     Serial.begin(9600);
@@ -40,38 +54,42 @@ void setup() {
     pinMode(A0, INPUT);
     pinMode(A1, INPUT);
 
+    pinMode(ENCODER_LEFT_A, INPUT_PULLUP);
+    pinMode(ENCODER_RIGHT_A, INPUT_PULLUP);
+
+    // Attach interruptions pour compter les ticks
+    attachInterrupt(digitalPinToInterrupt(ENCODER_LEFT_A), countTicksGauche, RISING);
+    attachInterrupt(digitalPinToInterrupt(ENCODER_RIGHT_A), countTicksDroite, RISING);
+
     servo.attach(SERVO_PIN);
     servo.write(spoint); // Position initiale (centrale)
     delay(500);
 }
 
 void loop() {
+    // Calcul de la distance parcourue
+    updateDistance();
+
+    // Gestion des étapes
+    if (distanceParcourue < distanceTotaleAvantVirage) {
+        avancer();
+    } else if (distanceParcourue < distanceTotaleAvantVirage + distanceApresVirage) {
+        if (distanceParcourue == distanceTotaleAvantVirage) {
+            //virage de 45°
+            virage(45);
+        }
+        avancer();
+    } else {
+        Stop();
+        return;
+    }
+
+    // Vérification des obstacles
     distance = DistanceSensor.ping_cm();
     if (distance > 0 && distance <= obstacleThreshold) {
         Obstacle();
         return;
     }
-
-    int valueLeft = analogRead(IR_LEFT);
-    int valueRight = analogRead(IR_RIGHT);
-
-    int error = valueRight - valueLeft;
-    float correction = computePID(error);
-
-    int speedMotorLEFT = constrain(baseSpeed - correction, 0, 50);
-    int speedMotorRIGHT = constrain(baseSpeed + correction, 0, 50);
-
-    myMotorLEFT->setSpeed(speedMotorLEFT);
-    myMotorLEFT->run(FORWARD);
-
-    myMotorRIGHT->setSpeed(speedMotorRIGHT);
-    myMotorRIGHT->run(FORWARD);
-
-    Serial.print("Distance: "); Serial.print(distance);
-    Serial.print(" Error: "); Serial.print(error);
-    Serial.print(" Correction: "); Serial.println(correction);
-
-    delay(10); 
 }
 
 float computePID(float error) {
@@ -87,11 +105,11 @@ void Obstacle() {
     delay(500);
     Stop();
 
-    servo.write(45); // vers la gauche
+    servo.write(45); // Vers la gauche
     delay(800);
     L = DistanceSensor.ping_cm();
 
-    servo.write(135); // vers la droite
+    servo.write(135); // Vers la droite
     delay(800);
     R = DistanceSensor.ping_cm();
 
@@ -113,7 +131,7 @@ void Obstacle() {
     }
 }
 
-void forward() {
+void avancer() {
     myMotorLEFT->setSpeed(baseSpeed);
     myMotorRIGHT->setSpeed(baseSpeed);
     myMotorLEFT->run(FORWARD);
@@ -146,4 +164,36 @@ void Stop() {
     myMotorRIGHT->setSpeed(0);
     myMotorLEFT->run(RELEASE);
     myMotorRIGHT->run(RELEASE);
+}
+
+void virage(int angle) {
+    // Effectuer un virage en fonction de l'angle
+    myMotorLEFT->setSpeed(baseSpeed);
+    myMotorRIGHT->setSpeed(baseSpeed);
+    myMotorLEFT->run(FORWARD);
+    myMotorRIGHT->run(BACKWARD);
+    delay(angle * 10); //durée pour virage (à ajuster)
+    Stop();
+}
+
+void updateDistance() {
+    noInterrupts(); // Empêche les interruptions pendant la lecture
+    int ticksGaucheCopy = ticksGauche;
+    int ticksDroiteCopy = ticksDroite;
+    interrupts(); // Réactive les interruptions
+
+    float moyenneTicks = (ticksGaucheCopy + ticksDroiteCopy) / 2.0;
+    distanceParcourue += moyenneTicks * (circonferenceRoue / ticksParRotation);
+
+    // Réinitialiser les ticks pour la prochaine itération
+    ticksGauche = 0;
+    ticksDroite = 0;
+}
+
+void countTicksGauche() {
+    ticksGauche++;
+}
+
+void countTicksDroite() {
+    ticksDroite++;
 }
