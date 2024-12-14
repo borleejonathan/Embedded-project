@@ -90,6 +90,13 @@ void loop() {
         Obstacle();
         return;
     }
+
+    Serial.print("Ticks gauche : ");
+    Serial.println(ticksGauche);
+    Serial.print("Ticks droite : ");
+    Serial.println(ticksDroite);
+    delay(100); // Pause pour la lisibilité
+
 }
 
 float computePID(float error) {
