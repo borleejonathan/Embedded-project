@@ -8,6 +8,12 @@ Adafruit_MotorShield AFMS = Adafruit_MotorShield();
 Adafruit_DCMotor *myMotorLEFT = AFMS.getMotor(3);
 Adafruit_DCMotor *myMotorRIGHT = AFMS.getMotor(4);
 
+
+// Variables globales pour la distance et les mesures de l'obstacle
+int distance = 0; // Distance mesurée par le capteur ultrason
+int L = 0;        // Distance mesurée à gauche lors du scan d'obstacle
+int R = 0;        // Distance mesurée à droite lors du scan d'obstacle
+
 // Capteurs IR
 #define IR_LEFT A0
 #define IR_RIGHT A1
@@ -26,18 +32,20 @@ int spoint = 90; // Position du servo
 // PID
 float kp = 1.5, ki = 0.0, kd = 0.5;
 float previousError = 0, integral = 0;
-int baseSpeed = 50;
+int baseSpeed = 30;
 
 // Suivi de distance
 volatile int ticksGauche = 0; // Ticks pour le moteur gauche
 volatile int ticksDroite = 0; // Ticks pour le moteur droit
 float distanceParcourue = 0;
 float distanceTotale = 1300; // Distance totale avant arrêt (en mm) (à ajuster)
-float circonferenceRoue = 70 * PI; // Circonférence de la roue (à ajuster)
+float circonferenceRoue = 20 * PI; // Circonférence de la roue (à ajuster)
 int ticksParRotation = 20; // Ticks par rotation (à ajuster)
 
 // Détection d'obstacles
 const int obstacleThreshold = 15;
+
+int buttonState = 0;
 
 // Encodeurs
 #define ENCODER_LEFT_A 2
