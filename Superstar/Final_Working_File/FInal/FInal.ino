@@ -32,18 +32,20 @@ int spoint = 90; // Position du servo
 // PID
 float kp = 1.5, ki = 0.0, kd = 0.5;
 float previousError = 0, integral = 0;
-int baseSpeed = 100;
+int baseSpeed = 30;
 
 // Suivi de distance
 volatile int ticksGauche = 0; // Ticks pour le moteur gauche
 volatile int ticksDroite = 0; // Ticks pour le moteur droit
 float distanceParcourue = 0;
 float distanceTotale = 1300; // Distance totale avant arrêt (en mm) (à ajuster)
-float circonferenceRoue = 44 * PI; // Circonférence de la roue (à ajuster)
+float circonferenceRoue = 20 * PI; // Circonférence de la roue (à ajuster)
 int ticksParRotation = 20; // Ticks par rotation (à ajuster)
 
 // Détection d'obstacles
 const int obstacleThreshold = 15;
+
+int buttonState = 0;
 
 // Encodeurs
 #define ENCODER_LEFT_A 2
